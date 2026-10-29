@@ -1,0 +1,34 @@
+{
+  "upstream_repository": "https://github.com/panyihang/ESP32P4_6-2-inch_USB-Display",
+  "upstream_commit": "17b774453ef106ab58d5ed9b885e759e0d67879f",
+  "source_project": "phone_esp32p4 (local development repository)",
+  "source_snapshot": "3bc6f0cbf021cc7b26d963476d028112c6f6a88f",
+  "firmware_version": "0.1.3",
+  "sdk_commit": "7101770dc6db2667b3c477cc31365dd1acd6db4e",
+  "sdk_required_patch": "patches/idf-dpi-frame-buffer-complete.patch",
+  "hid_header": "main/tusb/usb_descriptors.h",
+  "hid_sha256": "002596b637a0a4674d5b786bc49a1303a3f32b9ae3121fe66e22b1048491f809",
+  "driver_origin": "Espressif ST7701 1.1.3 from GUITION JC4880P443C_I_W vendor bundle; local panel timing defaults retained",
+  "driver_sha256": {
+    "CMakeLists.txt": "25a76e50bd067333b9143a1b36c837f03c901751318c574e014114f2c082d22a",
+    "idf_component.yml": "5930fe7c1c27f916108306411916efc93f7c0c400f7018c3957fcbcdf78f9d83",
+    "license.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "esp_lcd_st7701.c": "ce356f0d44bce2cebd380d0fb7974b377a2bb686d843fe2636f6bba87dd19ef3",
+    "esp_lcd_st7701_rgb.c": "268d192f5c74aee046334feeb0678bba31964c8aa68dd64282fe044199b8a326",
+    "esp_lcd_st7701_mipi.c": "ab7c34d311d9dc9c5f13ac373997b4e44b7c04d0136315a1c5106f600337300f",
+    "include/esp_lcd_st7701.h": "8a9d9473c5b620e1c54aeb0b3c13cb760176f757ec981c2a9759c6dec46105fd",
+    "priv_include/esp_lcd_st7701_interface.h": "aae70a54994b6963f6b9e432b4ea53a5a414448c072734f580caa3b3c0181a62"
+  },
+  "driver_source_sha256": {
+    "CMakeLists.txt": "25a76e50bd067333b9143a1b36c837f03c901751318c574e014114f2c082d22a",
+    "idf_component.yml": "5930fe7c1c27f916108306411916efc93f7c0c400f7018c3957fcbcdf78f9d83",
+    "license.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "esp_lcd_st7701.c": "ce356f0d44bce2cebd380d0fb7974b377a2bb686d843fe2636f6bba87dd19ef3",
+    "esp_lcd_st7701_rgb.c": "268d192f5c74aee046334feeb0678bba31964c8aa68dd64282fe044199b8a326",
+    "esp_lcd_st7701_mipi.c": "897900e47e3baee968d49e8580720d128bd9ecefea63eac7e1a84e5f01389e49",
+    "include/esp_lcd_st7701.h": "8a9d9473c5b620e1c54aeb0b3c13cb760176f757ec981c2a9759c6dec46105fd",
+    "priv_include/esp_lcd_st7701_interface.h": "aae70a54994b6963f6b9e432b4ea53a5a414448c072734f580caa3b3c0181a62"
+  },
+  "driver_text_normalization": "CRLF normalized to LF and trailing horizontal whitespace removed; source and checked-in hashes recorded separately",
+  "sdk_patch_sha256": "991f64512d0519a3300fcfe6cddc703d1151e05da686570763df81f6b240b082"
+}

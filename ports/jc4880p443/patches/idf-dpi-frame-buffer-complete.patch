@@ -1,0 +1,123 @@
+diff --git a/components/esp_lcd/dsi/esp_lcd_panel_dpi.c b/components/esp_lcd/dsi/esp_lcd_panel_dpi.c
+index cba926b0..882523a2 100644
+--- a/components/esp_lcd/dsi/esp_lcd_panel_dpi.c
++++ b/components/esp_lcd/dsi/esp_lcd_panel_dpi.c
+@@ -28,6 +28,9 @@ struct esp_lcd_dpi_panel_t {
+     esp_lcd_dsi_bus_handle_t bus; // DSI bus handle
+     uint8_t virtual_channel;      // Virtual channel ID, index from 0
+     uint8_t cur_fb_index;         // Current frame buffer index
++    portMUX_TYPE fb_submit_lock;
++    uint32_t fb_submit_seq;       // 发布请求与DMA选帧必须属于同一快照
++    uint32_t fb_completed_seq;
+     uint8_t num_fbs;              // Number of frame buffers
+     uint8_t *fbs[DPI_PANEL_MAX_FB_NUM]; // Frame buffers
+     uint32_t h_pixels;            // Horizontal pixels
+@@ -51,6 +54,7 @@ struct esp_lcd_dpi_panel_t {
+     esp_pm_lock_handle_t pm_lock;          // Power management lock
+ #endif
+     esp_lcd_dpi_panel_color_trans_done_cb_t on_color_trans_done; // Callback invoked when color data transfer has finished
++    esp_lcd_dpi_panel_general_cb_t on_frame_buf_complete; // DMA切换后才允许上层复用旧缓冲
+     esp_lcd_dpi_panel_refresh_done_cb_t on_refresh_done; // Callback invoked when one refresh operation finished (kinda like a vsync end)
+     void *user_ctx; // User context for the callback
+ };
+@@ -58,6 +62,10 @@ struct esp_lcd_dpi_panel_t {
+ static bool dpi_panel_draw_bitmap_hook_end(esp_lcd_panel_t *panel)
+ {
+     esp_lcd_dpi_panel_t *dpi_panel = __containerof(panel, esp_lcd_dpi_panel_t, base);
++    // DMA2D复制源不是LCD帧缓冲时，也要在复制完成后安排下一次帧完成通知。
++    portENTER_CRITICAL_ISR(&dpi_panel->fb_submit_lock);
++    dpi_panel->fb_submit_seq++;
++    portEXIT_CRITICAL_ISR(&dpi_panel->fb_submit_lock);
+     if (dpi_panel->on_color_trans_done) {
+         return dpi_panel->on_color_trans_done(panel, NULL, dpi_panel->user_ctx);
+     }
+@@ -89,7 +97,10 @@ bool mipi_dsi_dma_trans_done_cb(dw_gdma_channel_handle_t chan, const dw_gdma_tra
+ {
+     bool yield_needed = false;
+     esp_lcd_dpi_panel_t *dpi_panel = (esp_lcd_dpi_panel_t *)user_data;
++    portENTER_CRITICAL_ISR(&dpi_panel->fb_submit_lock);
+     uint8_t fb_index = dpi_panel->cur_fb_index;
++    uint32_t submitted_seq = dpi_panel->fb_submit_seq;
++    portEXIT_CRITICAL_ISR(&dpi_panel->fb_submit_lock);
+     dw_gdma_link_list_handle_t link_list = dpi_panel->link_lists[fb_index];
+
+     // restart the DMA transfer, keep refreshing the LCD
+@@ -101,6 +112,13 @@ bool mipi_dsi_dma_trans_done_cb(dw_gdma_channel_handle_t chan, const dw_gdma_tra
+     dw_gdma_channel_use_link_list(chan, link_list);
+     dw_gdma_channel_enable_ctrl(chan, true);
+
++    // 此时旧帧已被DMA完整取走，新链表已经提交；不要在更早的桥接器VSYNC释放旧帧。
++    // 若另一核在本ISR选帧之后才提交，必须等下一次DMA切换再确认，避免过早放行。
++    if (submitted_seq != dpi_panel->fb_completed_seq && dpi_panel->on_frame_buf_complete) {
++        dpi_panel->fb_completed_seq = submitted_seq;
++        yield_needed |= dpi_panel->on_frame_buf_complete(&dpi_panel->base, NULL, dpi_panel->user_ctx);
++    }
++
+ #if !MIPI_DSI_BRG_LL_EVENT_VSYNC
+     // the DMA descriptor is large enough to carry a whole frame buffer, so this event can also be treated as a fake "vsync end"
+     if (dpi_panel->on_refresh_done) {
+@@ -220,6 +238,7 @@ esp_err_t esp_lcd_new_panel_dpi(esp_lcd_dsi_bus_handle_t bus, const esp_lcd_dpi_
+     dpi_panel->out_color_format = out_color_format;
+     dpi_panel->bus = bus;
+     dpi_panel->num_fbs = num_fbs;
++    dpi_panel->fb_submit_lock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
+
+     // allocate frame buffer from PSRAM
+     size_t fb_size = panel_config->video_timing.h_size * panel_config->video_timing.v_size * bits_per_pixel / 8;
+@@ -619,7 +638,10 @@ static esp_err_t dpi_panel_draw_bitmap_2d(esp_lcd_panel_t *panel, int x_start, i
+         // the buffer to be flushed is still within the frame buffer, so even an unaligned address is OK
+         esp_cache_msync(cache_sync_start, cache_sync_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+
++        portENTER_CRITICAL(&dpi_panel->fb_submit_lock);
+         dpi_panel->cur_fb_index = draw_buf_fb_index;
++        dpi_panel->fb_submit_seq++;
++        portEXIT_CRITICAL(&dpi_panel->fb_submit_lock);
+         // invoke the trans done callback
+         if (dpi_panel->on_color_trans_done) {
+             dpi_panel->on_color_trans_done(&dpi_panel->base, NULL, dpi_panel->user_ctx);
+@@ -665,6 +687,9 @@ static esp_err_t dpi_panel_draw_bitmap_2d(esp_lcd_panel_t *panel, int x_start, i
+         size_t cache_sync_size = (y_end - y_start) * dpi_panel->h_pixels * bits_per_pixel / 8;
+         // the buffer to be flushed is still within the frame buffer, so even an unaligned address is OK
+         esp_cache_msync(cache_sync_start, cache_sync_size, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
++        portENTER_CRITICAL(&dpi_panel->fb_submit_lock);
++        dpi_panel->fb_submit_seq++;
++        portEXIT_CRITICAL(&dpi_panel->fb_submit_lock);
+         // invoke the trans done callback
+         if (dpi_panel->on_color_trans_done) {
+             dpi_panel->on_color_trans_done(&dpi_panel->base, NULL, dpi_panel->user_ctx);
+@@ -722,12 +747,16 @@ esp_err_t esp_lcd_dpi_panel_register_event_callbacks(esp_lcd_panel_handle_t pane
+     if (cbs->on_refresh_done) {
+         ESP_RETURN_ON_FALSE(esp_ptr_in_iram(cbs->on_refresh_done), ESP_ERR_INVALID_ARG, TAG, "on_refresh_done callback not in IRAM");
+     }
++    if (cbs->on_frame_buf_complete) {
++        ESP_RETURN_ON_FALSE(esp_ptr_in_iram(cbs->on_frame_buf_complete), ESP_ERR_INVALID_ARG, TAG, "on_frame_buf_complete callback not in IRAM");
++    }
+     if (user_ctx) {
+         ESP_RETURN_ON_FALSE(esp_ptr_internal(user_ctx), ESP_ERR_INVALID_ARG, TAG, "user context not in internal RAM");
+     }
+ #endif // CONFIG_LCD_DSI_ISR_CACHE_SAFE
+     dpi_panel->on_color_trans_done = cbs->on_color_trans_done;
+     dpi_panel->on_refresh_done = cbs->on_refresh_done;
++    dpi_panel->on_frame_buf_complete = cbs->on_frame_buf_complete;
+     dpi_panel->user_ctx = user_ctx;
+
+     // enable the vsync interrupt if the callback is provided
+diff --git a/components/esp_lcd/dsi/include/esp_lcd_mipi_dsi.h b/components/esp_lcd/dsi/include/esp_lcd_mipi_dsi.h
+index 99887f93..47f83af9 100644
+--- a/components/esp_lcd/dsi/include/esp_lcd_mipi_dsi.h
++++ b/components/esp_lcd/dsi/include/esp_lcd_mipi_dsi.h
+@@ -184,11 +184,14 @@ typedef esp_lcd_dpi_panel_general_cb_t esp_lcd_dpi_panel_refresh_done_cb_t;
+ /**
+  * @brief Type of LCD DPI panel callbacks
+  */
++// Brookesia双缓冲需要DMA已切换的事件，VSYNC不能代替旧缓冲可复用时刻。
++#define ESP_LCD_DPI_HAS_FRAME_BUF_COMPLETE_CB 1
+ typedef struct {
+     esp_lcd_dpi_panel_color_trans_done_cb_t on_color_trans_done; /*!< Invoked when user's color buffer copied to the internal frame buffer.
+                                                                       This is an indicator that the draw buffer can be recycled safely.
+                                                                       But doesn't mean the draw buffer finishes the refreshing to the screen. */
+     esp_lcd_dpi_panel_refresh_done_cb_t on_refresh_done;         /*!< Invoked when the internal frame buffer finishes refreshing to the screen */
++    esp_lcd_dpi_panel_general_cb_t on_frame_buf_complete;       /*!< Previous framebuffer consumed by DMA; safe to reuse after link switch. */
+ } esp_lcd_dpi_panel_event_callbacks_t;
+
+ /**

@@ -1,0 +1,6 @@
+dependencies:
+  idf: "==6.0.2"
+  espressif/tinyusb: "==0.21.0~1"
+  espressif/esp_lcd_touch_gt911: "==1.2.1"
+  esp_lcd_st7701:
+    path: ../components/esp_lcd_st7701

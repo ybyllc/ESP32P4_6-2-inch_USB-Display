@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+set(PROJECT_VER "0.1.3")
+set(COMPONENTS main)
+if(CMAKE_HOST_WIN32)
+    set(CMAKE_NINJA_FORCE_RESPONSE_FILE 1 CACHE INTERNAL "")
+endif()
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(jc4880_usb_display)
