@@ -4,6 +4,10 @@
 
 **硬件与详细说明：[https://oshwhub.com/an_ye/project_ygsitoma](https://oshwhub.com/an_ye/project_ygsitoma)**
 
+## 其它板型移植
+
+- [GUITION JC4880P443C_I_W / 480×800 ST7701 + GT911 独立专版](ports/jc4880p443/README.md)（ESP-IDF 6.0.2；构建/验收状态见端口说明）
+
 ## 功能
 
 - **USB 副屏**：Windows 驱动通过 USB vendor 接口下发 JPEG 帧，硬件 JPEG 解码后显示在 452×1280 屏上
