@@ -20,3 +20,4 @@ if($env:IDF_PATH){
 }
 & python "$port/tools/check_sources.py"
 if($LASTEXITCODE){throw '来源或路径检查失败'}
+& "$port/tests/touch_mapping_rect_test.ps1"

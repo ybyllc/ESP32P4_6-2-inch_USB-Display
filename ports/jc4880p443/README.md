@@ -21,6 +21,17 @@
 
 若触摸落到其它显示器，在Windows“控制面板→Tablet PC设置→设置”将触摸关联到副屏，固件不能猜测Windows显示器排列。
 
+可用只读工具确认实际关联，再按需启动官方向导：
+
+```powershell
+pwsh -File tools/inspect_touch_mapping.ps1
+pwsh -File tools/repair_touch_mapping.ps1 -Setup
+```
+
+工具使用`GetPointerDevices/GetPointerDeviceRects`比较触摸当前显示区域与唯一480×800/800×480副屏，不按固定DISPLAY编号猜目标。只有确认唯一副屏、唯一HID与唯一触摸设备才启动Windows内置`MultiDigiMon.exe -touch`，不写私有注册表。向导中用Enter跳过其它屏幕，提示到副屏后需用真实手指点一下；鼠标点击不能替代设备身份识别。向导结束再次读取实际关联区域，没有匹配则报失败，不声称已修复。
+
+若仍在原手机开发仓库共享设备环境中使用，须从该仓库`tools/device_session.py`持锁入口前台执行完整向导，避免与烧录/串口任务并发。横纵屏切换由Windows在正确关联后转换，暂不在固件重复旋转。若关联已正确但实际方向仍错，需进一步采集原始触点及显示方向，不直接假定关联是所有方向错误的唯一原因。
+
 `tools/usb_display_send.py`可用来发图或镜像主屏，**不会创建虚拟扩展桌面**；使用它需独立vendor WinUSB/libusb绑定，不能与已占用vendor接口的显示驱动同时使用。作者显示驱动工作时无需启动该工具。
 
 ## 构建
